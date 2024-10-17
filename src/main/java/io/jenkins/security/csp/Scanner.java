@@ -15,13 +15,14 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 public class Scanner {
+    private static final String JS_EVENT_ATTRIBUTES = "(on(auxclick|beforeinput|beforematch|beforetoggle|blur|cancel|canplay|canplaythrough|change|click|close|contextlost|contextmenu|contextrestored|copy|cuechange|cut|dblclick|drag|dragend|dragenter|dragleave|dragover|dragstart|drop|durationchange|emptied|ended|error|focus|formdata|input|invalid|keydown|keypress|keyup|load|loadeddata|loadedmetadata|loadstart|mousedown|mouseenter|mouseleave|mousemove|mouseout|mouseover|mouseup|paste|pause|play|playing|progress|ratechange|reset|resize|scroll|scrollend|securitypolicyviolation|seeked|seeking|select|slotchange|stalled|submit|suspend|timeupdate|toggle|volumechange|waiting|wheel))";
+
     /**
      * Patterns identified in .jelly files
      */
-    protected static final Map<String, Pattern> JELLY_PATTERNS = Map.of("Inline Event Handler", Pattern.compile("<[^>]+\\s(on[a-z]+)=[^>]+>"),
-            // Experimentally, the lookbehind is only relevant in syntactically invalid-ish files (layout/layout.jelly), but doesn't break anything either
-            "Inline Script Block", Pattern.compile("(<script>|<script[^>]*[^/]>)\\s*?(?!</script>)\\S.*?(?<!<script[^>]{0,1000}>)</script>", Pattern.DOTALL),
-            "Legacy checkUrl", Pattern.compile("(checkUrl=\"[^\"]*'[^\"]*'[^\"]*\")|(checkUrl='[^']*\"[^']*\"[^']*')"));
+    protected static final Map<String, Pattern> JELLY_PATTERNS = Map.of("Inline Event Handler", Pattern.compile("<[^>]+\\s" + JS_EVENT_ATTRIBUTES + "=[^>]+>", Pattern.CASE_INSENSITIVE),
+            "Inline Script Block", Pattern.compile("(<script>|<script[^>]*[^/]>)\\s*?(?!</script>)\\S.*?</script>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE),
+            "Legacy checkUrl", Pattern.compile("(checkUrl=\"[^\"]*'[^\"]*'[^\"]*\")|(checkUrl='[^']*\"[^']*\"[^']*')", Pattern.CASE_INSENSITIVE));
 
     /**
      * Patterns identified in .js files
@@ -30,6 +31,9 @@ public class Scanner {
     // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/eval#direct_and_indirect_eval
     // geval is defined in hudson-behavior.js
     protected static final Map<String, Pattern> JS_PATTERNS = Map.of("(g)eval Call", Pattern.compile("\\Wg?eval\\W"));
+
+    protected static final Map<String, Pattern> JAVA_PATTERNS = Map.of("Inline Event Handler (Java)", Pattern.compile("(?<![a-z0-9])" + JS_EVENT_ATTRIBUTES + "=.*?((?<!\\\\)\")", Pattern.CASE_INSENSITIVE),
+            "Inline Script Block (Java)", Pattern.compile("(<script>|<script[^>]*[^/]>)\\s*?(?!</script>)\\S.*?</script>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE));
 
     protected static class Match {
         protected final String title;
@@ -81,12 +85,18 @@ public class Scanner {
     }
 
     private static void visitFile(File file) throws IOException {
-        if (file.getName().endsWith(".jelly")) {
+        final String fileName = file.getName();
+        if (fileName.endsWith(".jelly") || fileName.endsWith(".html") || fileName.endsWith(".properties")) {
             final String text = Files.readString(file.toPath());
             printMatches(matchRegexes(JELLY_PATTERNS, text, file));
         }
 
-        if (file.getName().endsWith(".js")) {
+        if (fileName.endsWith(".java")) {
+            final String text = Files.readString(file.toPath());
+            printMatches(matchRegexes(JAVA_PATTERNS, text, file));
+        }
+
+        if (fileName.endsWith(".js")) {
             final String text = Files.readString(file.toPath());
             printMatches(matchRegexes(JS_PATTERNS, text, file));
         }
